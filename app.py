@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from io import StringIO
+
 import pandas as pd
 import streamlit as st
 
@@ -23,25 +25,53 @@ def read_uploaded_csv(uploaded_file) -> pd.DataFrame | None:
     return pd.read_csv(uploaded_file)
 
 
+def read_pasted_csv(csv_text: str) -> pd.DataFrame | None:
+    if not csv_text.strip():
+        return None
+    return pd.read_csv(StringIO(csv_text))
+
+
 default_raw, default_reference = cached_data()
 
 st.sidebar.header("Upload Data")
-uploaded_raw = st.sidebar.file_uploader("Raw dataset CSV", type=["csv"])
-uploaded_reference = st.sidebar.file_uploader("Reference dataset CSV", type=["csv"])
-use_uploaded = uploaded_raw is not None or uploaded_reference is not None
+input_mode = st.sidebar.radio("Input mode", ["Default data", "Upload CSV files", "Paste CSV data"])
+uploaded_raw = None
+uploaded_reference = None
+raw_text = ""
+reference_text = ""
+
+if input_mode == "Upload CSV files":
+    uploaded_raw = st.sidebar.file_uploader("Raw dataset CSV", type=["csv"])
+    uploaded_reference = st.sidebar.file_uploader("Reference dataset CSV", type=["csv"])
+elif input_mode == "Paste CSV data":
+    raw_text = st.sidebar.text_area("Raw CSV data", height=180, placeholder="customer_id,email,full_name,...")
+    reference_text = st.sidebar.text_area("Reference CSV data", height=180, placeholder="customer_id,email,full_name,...")
 
 try:
-    raw = read_uploaded_csv(uploaded_raw) if uploaded_raw is not None else default_raw
-    reference = read_uploaded_csv(uploaded_reference) if uploaded_reference is not None else default_reference
+    if input_mode == "Upload CSV files":
+        raw = read_uploaded_csv(uploaded_raw) if uploaded_raw is not None else default_raw
+        reference = read_uploaded_csv(uploaded_reference) if uploaded_reference is not None else default_reference
+    elif input_mode == "Paste CSV data":
+        raw = read_pasted_csv(raw_text) if raw_text.strip() else default_raw
+        reference = read_pasted_csv(reference_text) if reference_text.strip() else default_reference
+    else:
+        raw = default_raw
+        reference = default_reference
 except Exception as exc:
-    st.error(f"Could not read uploaded CSV: {exc}")
+    st.error(f"Could not read CSV input: {exc}")
     st.stop()
 
-if use_uploaded and (uploaded_raw is None or uploaded_reference is None):
+if input_mode == "Upload CSV files" and (uploaded_raw is None or uploaded_reference is None):
     st.sidebar.warning("Upload both raw and reference CSV files to compare a custom dataset.")
+if input_mode == "Paste CSV data" and (not raw_text.strip() or not reference_text.strip()):
+    st.sidebar.warning("Paste both raw and reference CSV data to compare a custom dataset.")
 
-raw_label = uploaded_raw.name if uploaded_raw is not None else str(RAW_PATH)
-reference_label = uploaded_reference.name if uploaded_reference is not None else str(REFERENCE_PATH)
+raw_label = uploaded_raw.name if uploaded_raw is not None else ("pasted raw CSV" if raw_text.strip() else str(RAW_PATH))
+reference_label = (
+    uploaded_reference.name
+    if uploaded_reference is not None
+    else ("pasted reference CSV" if reference_text.strip() else str(REFERENCE_PATH))
+)
 issues = run_detectors(raw, reference)
 issue_df = pd.DataFrame([issue.__dict__ for issue in issues])
 schema = infer_reference_schema(reference)
@@ -91,10 +121,10 @@ with issues_tab:
 with sql_tab:
     st.subheader("Runnable DuckDB Repair SQL")
     sql = full_repair_sql(RAW_PATH)
-    if use_uploaded:
+    if input_mode != "Default data":
         st.info(
             "The generated SQL is shown for the bundled assignment file path. "
-            "For uploaded data, save the raw CSV and replace the path in `read_csv_auto(...)`."
+            "For custom data, save the raw CSV and replace the path in `read_csv_auto(...)`."
         )
     st.code(sql, language="sql")
     st.download_button("Download repair SQL", sql, file_name="repair_customers.sql")
