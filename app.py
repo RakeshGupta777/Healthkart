@@ -17,13 +17,37 @@ def cached_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     return load_data()
 
 
-raw, reference = cached_data()
+def read_uploaded_csv(uploaded_file) -> pd.DataFrame | None:
+    if uploaded_file is None:
+        return None
+    return pd.read_csv(uploaded_file)
+
+
+default_raw, default_reference = cached_data()
+
+st.sidebar.header("Upload Data")
+uploaded_raw = st.sidebar.file_uploader("Raw dataset CSV", type=["csv"])
+uploaded_reference = st.sidebar.file_uploader("Reference dataset CSV", type=["csv"])
+use_uploaded = uploaded_raw is not None or uploaded_reference is not None
+
+try:
+    raw = read_uploaded_csv(uploaded_raw) if uploaded_raw is not None else default_raw
+    reference = read_uploaded_csv(uploaded_reference) if uploaded_reference is not None else default_reference
+except Exception as exc:
+    st.error(f"Could not read uploaded CSV: {exc}")
+    st.stop()
+
+if use_uploaded and (uploaded_raw is None or uploaded_reference is None):
+    st.sidebar.warning("Upload both raw and reference CSV files to compare a custom dataset.")
+
+raw_label = uploaded_raw.name if uploaded_raw is not None else str(RAW_PATH)
+reference_label = uploaded_reference.name if uploaded_reference is not None else str(REFERENCE_PATH)
 issues = run_detectors(raw, reference)
 issue_df = pd.DataFrame([issue.__dict__ for issue in issues])
 schema = infer_reference_schema(reference)
 
 st.title("Data Quality & SQL Repair Studio")
-st.caption("Raw customer import compared with the clean reference schema and dataset.")
+st.caption("Raw customer import compared with a clean reference schema and dataset.")
 
 metric_cols = st.columns(5)
 metric_cols[0].metric("Raw rows", f"{len(raw):,}")
@@ -67,6 +91,11 @@ with issues_tab:
 with sql_tab:
     st.subheader("Runnable DuckDB Repair SQL")
     sql = full_repair_sql(RAW_PATH)
+    if use_uploaded:
+        st.info(
+            "The generated SQL is shown for the bundled assignment file path. "
+            "For uploaded data, save the raw CSV and replace the path in `read_csv_auto(...)`."
+        )
     st.code(sql, language="sql")
     st.download_button("Download repair SQL", sql, file_name="repair_customers.sql")
     report = markdown_report(raw, reference)
@@ -75,8 +104,8 @@ with sql_tab:
 with data_tab:
     left, right = st.columns(2)
     with left:
-        st.subheader(f"Raw: {RAW_PATH}")
+        st.subheader(f"Raw: {raw_label}")
         st.dataframe(raw.head(200), use_container_width=True)
     with right:
-        st.subheader(f"Reference: {REFERENCE_PATH}")
+        st.subheader(f"Reference: {reference_label}")
         st.dataframe(reference.head(200), use_container_width=True)
