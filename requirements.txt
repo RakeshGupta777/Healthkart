@@ -1,0 +1,4 @@
+pandas>=2.2
+streamlit>=1.36
+duckdb>=1.0
+pytest>=8.0
