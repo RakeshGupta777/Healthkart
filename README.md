@@ -2,6 +2,10 @@
 
 A Streamlit web app for the BrightLife Care Data Engineering Intern assignment. It loads the provided raw and reference customer datasets, profiles them, separates schema-level and content-level data quality issues, and generates runnable DuckDB SQL to repair the raw import.
 
+## Live App
+
+[Open the deployed Streamlit app](https://healthkart-brgvva3jvree7g4vgthmw7.streamlit.app/)
+
 ## What It Detects
 
 - Schema mismatches: raw-only or missing reference columns.
