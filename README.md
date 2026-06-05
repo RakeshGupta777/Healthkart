@@ -68,4 +68,4 @@ The generated SQL uses DuckDB functions such as `read_csv_auto`, `regexp_replace
 
 ## License
 
-This repository is prepared for release under an OSI-approved license. Add the license file requested by your submission process before publishing.
+This repository is prepared for release under an OSI-approved license. 
